@@ -12,8 +12,12 @@ export function useVideoGeneration() {
   const [status, setStatus] = useState<GenerationStatus>({ state: 'idle' });
 
   const checkGenerationStatus = async (taskId: string) => {
-    const response = await fetch(`/.netlify/functions/runway/status/${taskId}`, {
-      headers: { 'Content-Type': 'application/json' },
+    const response = await fetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
+      headers: {
+        'Authorization': `Bearer ${import.meta.env.VITE_RUNWAY_API_KEY}`,
+        'Content-Type': 'application/json',
+        'X-Runway-Version': '2024-11-06'
+      },
     });
 
     if (!response.ok) {
@@ -21,11 +25,6 @@ export function useVideoGeneration() {
     }
 
     const data = await response.json();
-    
-    if (data.error) {
-      throw new Error(data.error);
-    }
-
     return {
       status: data.status,
       output: data.output?.[0]
@@ -37,13 +36,13 @@ export function useVideoGeneration() {
     const maxAttempts = Math.floor(GENERATION_TIMEOUT / POLLING_INTERVAL);
 
     while (attempts < maxAttempts) {
-      const { status, output } = await checkGenerationStatus(taskId);
+      const { status: taskStatus, output } = await checkGenerationStatus(taskId);
       
-      if (status === 'SUCCEEDED' && output) {
+      if (taskStatus === 'SUCCEEDED' && output) {
         return output;
       }
       
-      if (status === 'FAILED') {
+      if (taskStatus === 'FAILED') {
         throw new Error('Video generation failed');
       }
 
@@ -92,13 +91,13 @@ export function useVideoGeneration() {
         throw new Error(error.message || 'Failed to start video generation');
       }
 
-      const { taskId } = await response.json();
-      if (!taskId) {
+      const { id } = await response.json();
+      if (!id) {
         throw new Error('No task ID received');
       }
 
       // Wait for completion
-      const videoUrl = await waitForCompletion(taskId);
+      const videoUrl = await waitForCompletion(id);
       
       // Save to history
       await saveVideoToHistory(user.uid, videoUrl, config);
