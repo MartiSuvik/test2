@@ -1,4 +1,4 @@
-import { Handler } from '@netlify/functions';
+import { Handler } from '@netlint/functions';
 
 export const handler: Handler = async (event) => {
   // Handle CORS preflight requests
@@ -57,26 +57,41 @@ export const handler: Handler = async (event) => {
       }),
     });
 
+    const data = await response.text(); // First get response as text
+    let jsonData;
+    
+    try {
+      jsonData = JSON.parse(data); // Try to parse as JSON
+    } catch (e) {
+      console.error('Invalid JSON response:', data);
+      return {
+        statusCode: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+        body: JSON.stringify({ error: 'Invalid response from Runway API' }),
+      };
+    }
+
     if (!response.ok) {
-      const errorData = await response.json();
       return {
         statusCode: response.status,
         headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
         },
-        body: JSON.stringify({ error: errorData.message || 'Failed to generate video' }),
+        body: JSON.stringify({ error: jsonData.message || 'Failed to generate video' }),
       };
     }
 
-    const data = await response.json();
     return {
       statusCode: 200,
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify(jsonData),
     };
   } catch (error) {
     console.error('Error:', error);
