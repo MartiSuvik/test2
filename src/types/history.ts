@@ -1,11 +1,22 @@
-export interface VideoHistoryItem {
+import type { VideoConfig } from './video';
+
+export interface HistoryEntry {
   id: string;
-  userId: string;
+  imageUrl: string;
   videoUrl: string;
-  thumbnailUrl: string;
   createdAt: string;
-  config: {
-    duration: number;
-    aspectRatio: string;
-  };
+  config: VideoConfig;
+  status: 'completed' | 'failed';
+  error?: string;
+}
+
+export interface PaginatedHistory {
+  entries: HistoryEntry[];
+  lastVisible: unknown | null;
+  hasMore: boolean;
+}
+
+export interface HistoryQueryOptions {
+  limit?: number;
+  startAfter?: unknown;
 }
