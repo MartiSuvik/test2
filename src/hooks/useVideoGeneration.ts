@@ -70,19 +70,21 @@ export function useVideoGeneration() {
 
       // Initialize generation
       setStatus({ state: 'processing', progress: 0 });
-      const response = await fetch('/.netlify/functions/runway', {
+      const response = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_RUNWAY_API_KEY}`,
+          'Content-Type': 'application/json',
+          'X-Runway-Version': '2024-11-06'
+        },
         body: JSON.stringify({
-          imageUrl: url,
-          config: {
-            ...config,
-            ratio: config.aspectRatio === '16:9' ? '1280:768' : '768:1280',
-            seed: Math.floor(Math.random() * 4294967295),
-            model: 'gen3a_turbo',
-            promptText: 'Generate a video',
-            watermark: false,
-          },
+          promptImage: url,
+          seed: Math.floor(Math.random() * 4294967295),
+          model: 'gen3a_turbo',
+          promptText: 'Generate a video',
+          watermark: false,
+          duration: config.duration,
+          ratio: config.aspectRatio === '16:9' ? '1280:768' : '768:1280'
         }),
       });
 
