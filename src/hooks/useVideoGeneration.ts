@@ -1,14 +1,58 @@
 import { useState, useCallback } from 'react';
-import { generateVideo, checkGenerationStatus } from '../services/runway';
 import { uploadImage } from '../services/storage';
 import type { VideoConfig, GenerationStatus } from '../types/video';
 import { useAuth } from './useAuth';
 
 const GENERATION_TIMEOUT = 300000; // 5 minutes
+const POLLING_INTERVAL = 2000; // 2 seconds
 
 export function useVideoGeneration() {
   const { user } = useAuth();
   const [status, setStatus] = useState<GenerationStatus>({ state: 'idle' });
+
+  const checkGenerationStatus = async (taskId: string): Promise<string> => {
+    const response = await fetch(`/.netlify/functions/runway/status/${taskId}`, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to check generation status');
+    }
+
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    return data.status;
+  };
+
+  const waitForCompletion = async (taskId: string): Promise<string> => {
+    let attempts = 0;
+    const maxAttempts = Math.floor(GENERATION_TIMEOUT / POLLING_INTERVAL);
+
+    while (attempts < maxAttempts) {
+      const status = await checkGenerationStatus(taskId);
+      
+      if (status === 'completed' && data.videoUrl) {
+        return data.videoUrl;
+      }
+      
+      if (status === 'failed') {
+        throw new Error('Video generation failed');
+      }
+
+      // Update progress based on attempts
+      const progress = Math.min(90, (attempts / maxAttempts) * 100);
+      setStatus({ state: 'processing', progress });
+
+      await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL));
+      attempts++;
+    }
+
+    throw new Error('Generation timed out');
+  };
 
   const generate = useCallback(async (file: File, config: VideoConfig) => {
     if (!user) {
@@ -16,46 +60,52 @@ export function useVideoGeneration() {
     }
 
     try {
-      // Start upload
+      // Upload phase
       setStatus({ state: 'uploading', progress: 0 });
       const { url } = await uploadImage(file, user.uid, (progress) => {
         setStatus({ state: 'uploading', progress });
       });
 
-      // Start processing
+      // Initialize generation
       setStatus({ state: 'processing', progress: 0 });
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), GENERATION_TIMEOUT);
+      const response = await fetch('/.netlify/functions/runway', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: url,
+          config: {
+            ...config,
+            ratio: config.aspectRatio === '16:9' ? '1280:768' : '768:1280',
+            seed: Math.floor(Math.random() * 4294967295),
+            model: 'gen3a_turbo',
+            promptText: 'Generate a video',
+            watermark: false,
+          },
+        }),
+      });
 
-      try {
-        const response = await fetch('/.netlify/functions/runway', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageUrl: url, config }),
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to generate video');
-        }
-
-        const result = await response.json();
-        
-        if (result.videoUrl) {
-          setStatus({ 
-            state: 'completed',
-            progress: 100,
-            videoUrl: result.videoUrl 
-          });
-          return result;
-        } else {
-          throw new Error('No video URL in response');
-        }
-      } finally {
-        clearTimeout(timeoutId);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to start video generation');
       }
+
+      const { taskId } = await response.json();
+      if (!taskId) {
+        throw new Error('No task ID received');
+      }
+
+      // Wait for completion
+      const videoUrl = await waitForCompletion(taskId);
+      
+      setStatus({ 
+        state: 'completed',
+        progress: 100,
+        videoUrl 
+      });
+
+      return { videoUrl };
     } catch (error) {
+      console.error('Video generation error:', error);
       setStatus({
         state: 'error',
         error: error instanceof Error ? error.message : 'An error occurred',
