@@ -1,45 +1,36 @@
 import type { VideoConfig } from '../types/video';
 
-const RUNWAY_API_KEY = import.meta.env.VITE_RUNWAY_API_KEY;
-
-export async function generateVideo(imageUrl: string, config: VideoConfig): Promise<string> {
-  // Create a proxy URL to handle CORS
-  const proxyUrl = '/api/runway/generate';
-  
-  const response = await fetch(proxyUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      apiKey: RUNWAY_API_KEY,
-      imageUrl,
-      config
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to generate video');
-  }
-
-  const result = await response.json();
-  return result.id;
+interface GenerationResponse {
+  taskId: string;
+  status: string;
 }
 
-export async function checkGenerationStatus(id: string): Promise<any> {
-  // Create a proxy URL to handle CORS
-  const proxyUrl = `/api/runway/status/${id}`;
-  
-  const response = await fetch(proxyUrl, {
-    headers: {
-      'Authorization': `Bearer ${RUNWAY_API_KEY}`,
-    },
+interface StatusResponse {
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  videoUrl?: string;
+  error?: string;
+}
+
+export async function startGeneration(imageUrl: string, config: VideoConfig): Promise<GenerationResponse> {
+  const response = await fetch('/.netlify/functions/runway', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageUrl, config }),
   });
 
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.message || 'Failed to check generation status');
+    throw new Error(error.message || 'Failed to start generation');
+  }
+
+  return response.json();
+}
+
+export async function checkStatus(taskId: string): Promise<StatusResponse> {
+  const response = await fetch(`/.netlify/functions/runway/status/${taskId}`);
+
+  if (!response.ok) {
+    throw new Error('Failed to check status');
   }
 
   return response.json();
