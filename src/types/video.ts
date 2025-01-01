@@ -3,16 +3,9 @@ export interface VideoConfig {
   aspectRatio: '16:9' | '9:16';
 }
 
-export interface VideoGenerationResponse {
-  id: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  videoUrl?: string;
-  error?: string;
-}
-
-export interface UploadProgress {
-  progress: number;
-  state: 'idle' | 'uploading' | 'processing' | 'completed' | 'error';
-  error?: string;
-  videoUrl?: string;
-}
+export type GenerationStatus = 
+  | { state: 'idle' }
+  | { state: 'uploading'; progress: number }
+  | { state: 'processing'; progress: number }
+  | { state: 'completed'; progress: number; videoUrl: string }
+  | { state: 'error'; error: string };
