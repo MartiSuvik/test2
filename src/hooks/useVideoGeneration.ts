@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { uploadImage } from '../services/storage';
+import { saveVideoToHistory } from '../services/history';
 import type { VideoConfig, GenerationStatus } from '../types/video';
 import { useAuth } from './useAuth';
 
@@ -10,7 +11,7 @@ export function useVideoGeneration() {
   const { user } = useAuth();
   const [status, setStatus] = useState<GenerationStatus>({ state: 'idle' });
 
-  const checkGenerationStatus = async (taskId: string): Promise<string> => {
+  const checkGenerationStatus = async (taskId: string) => {
     const response = await fetch(`/.netlify/functions/runway/status/${taskId}`, {
       headers: { 'Content-Type': 'application/json' },
     });
@@ -25,7 +26,10 @@ export function useVideoGeneration() {
       throw new Error(data.error);
     }
 
-    return data.status;
+    return {
+      status: data.status,
+      output: data.output?.[0]
+    };
   };
 
   const waitForCompletion = async (taskId: string): Promise<string> => {
@@ -33,17 +37,16 @@ export function useVideoGeneration() {
     const maxAttempts = Math.floor(GENERATION_TIMEOUT / POLLING_INTERVAL);
 
     while (attempts < maxAttempts) {
-      const status = await checkGenerationStatus(taskId);
+      const { status, output } = await checkGenerationStatus(taskId);
       
-      if (status === 'completed' && data.videoUrl) {
-        return data.videoUrl;
+      if (status === 'SUCCEEDED' && output) {
+        return output;
       }
       
-      if (status === 'failed') {
+      if (status === 'FAILED') {
         throw new Error('Video generation failed');
       }
 
-      // Update progress based on attempts
       const progress = Math.min(90, (attempts / maxAttempts) * 100);
       setStatus({ state: 'processing', progress });
 
@@ -96,6 +99,9 @@ export function useVideoGeneration() {
 
       // Wait for completion
       const videoUrl = await waitForCompletion(taskId);
+      
+      // Save to history
+      await saveVideoToHistory(user.uid, videoUrl, config);
       
       setStatus({ 
         state: 'completed',
