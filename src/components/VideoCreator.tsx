@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import { EffectGrid } from './EffectGrid';
-import { ImageUploader } from './ImageUploader';
 import { VideoConfig } from './VideoConfig';
-import { ImageToVideo } from './ImageToVideo'; // Changed from VideoGenerator
 import { effects } from '../data/effects';
 import type { Effect } from '../data/effects';
 import type { VideoConfig as VideoConfigType } from '../types/video';
 
-const steps = ['Select Effect', 'Upload Image', 'Configure Video'] as const;
+const steps = ['Select Effect', 'Configure Video'] as const;
 type Step = typeof steps[number];
 
 export function VideoCreator() {
@@ -21,20 +19,14 @@ export function VideoCreator() {
 
   const handleEffectSelect = (effect: Effect) => {
     setSelectedEffect(effect);
-    setCurrentStep('Upload Image');
-  };
-
-  const handleImageUpload = (file: File) => {
-    setImageFile(file);
     setCurrentStep('Configure Video');
   };
 
   const handleBack = () => {
     if (currentStep === 'Configure Video') {
-      setCurrentStep('Upload Image');
-    } else if (currentStep === 'Upload Image') {
       setCurrentStep('Select Effect');
       setSelectedEffect(null);
+      setImageFile(null);
     }
   };
 
@@ -48,22 +40,16 @@ export function VideoCreator() {
             onSelectEffect={handleEffectSelect}
           />
         );
-      case 'Upload Image':
-        return (
-          <ImageUploader
-            onFileSelect={handleImageUpload}
-            onBack={handleBack}
-          />
-        );
       case 'Configure Video':
-        return imageFile ? (
-          <ImageToVideo
+        return (
+          <VideoConfig
             config={config}
             onChange={setConfig}
             onBack={handleBack}
             imageFile={imageFile}
+            onImageSelect={setImageFile}
           />
-        ) : null;
+        );
       default:
         return null;
     }
